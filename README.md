@@ -119,7 +119,7 @@ sig LoadBalancer {
 	// Allow the load balancer to hit the instance listener
 
 	// All target groups associated with security groups
-	all target : (univ.(listeners.rules.actions)).groups.targets & (Instance+IP) |
+	all target : (listeners.rules.actions[univ]).groups.targets & (Instance+IP) |
 			 // the port that the listener is trying to forward to allows access from the security group assocaited with the load balancer
 		allows[securityGroups, target.@securityGroups, target.port]
 }
