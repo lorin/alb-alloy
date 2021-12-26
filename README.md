@@ -58,9 +58,16 @@ sig Query {}
 
 ## Security group
 
+
 <https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html>
 
 ```alloy
+
+// True if src is allowed to reach dest on port
+pred allows[source : set SecurityGroup, dest : set SecurityGroup, port: Port] {
+	port in (source.outbound.ports & dest.inbound.ports)
+}
+
 sig SecurityGroup {
 	inbound: set SecurityGroupRule,
 	outbound: set SecurityGroupRule
@@ -96,10 +103,25 @@ one sig TCP extends SecurityGroupProtocol {}
 sig LoadBalancer {
 	//  You add one or more listeners to your load balancer.
 	listeners: set Listener,
-	securityGroups: set SecurityGroup
+	securityGroups: set SecurityGroup,
 } {
 	// The docs don't specify this, but presumably the listeners have to be on different ports
 	no disj l1, l2: listeners | l1.port=l2.port
+
+	// The rules for the security groups that are associated with your load balancer must allow traffic in both directions on both the listener and the health check ports.
+
+	// Allow inbound access to the listener
+	all l: Listener | some s : securityGroups | {
+		l.port in s.inbound.ports
+	}
+
+
+	// Allow the load balancer to hit the instance listener
+
+	// All target groups associated with security groups
+	all target : (univ.(listeners.rules.actions)).groups.targets & (Instance+IP) |
+			 // the port that the listener is trying to forward to allows access from the security group assocaited with the load balancer
+		allows[securityGroups, target.@securityGroups, target.port]
 }
 
 
@@ -297,7 +319,16 @@ one sig HTTP1_1, HTTP2, GRPC extends ProtocolVersion {}
 
 ```alloy
 abstract sig Target {}
-sig Instance, IP, Lambda extends Target {}
+abstract sig SecurityGroupTarget extends Target {
+	securityGroups: set SecurityGroup
+}
+
+sig Instance, IP extends SecurityGroupTarget {}
+
+
+// Lambdas don't use security groups for access permissions, they use a different mechanism, see:
+// https://docs.aws.amazon.com/lambda/latest/dg/services-alb.html
+sig Lambda extends Target {}
 ```
 
 
@@ -331,7 +362,33 @@ sig HealthCheckPath {
 
 // Model of an integer count
 sig Count {}
+```
 
+## Autoscaling group
+
+Interestingly, you don't add an autoscaling group to a load balancer.
+Instead, you add a load balancer to an autoscaling group.
+Presumably, the ASG service is responsible for adding and removing targets to/from the load balancer's target group.
+
+```alloy
+sig AutoScalingGroup {
+	instances: set Instance,
+	securityGroups: set SecurityGroup,
+	loadBalancer: lone LoadBalancer,
+	targetGroup: lone TargetGroup,
+	targetGroupState : TargetGroupState
+
+} {
+	// All of the instances have the same security group configuration
+	all i : instances | securityGroups = i.@securityGroups
+
+	// if the ASG is associated with a load balancer, it is associated with a target group
+	some loadBalancer => some targetGroup
+}
+
+// https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_LoadBalancerTargetGroupState.html
+abstract sig TargetGroupState {}
+one sig Adding, Added, InService, Removing, Removed extends TargetGroupState {}
 ```
 
 
