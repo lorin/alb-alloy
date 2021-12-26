@@ -3,7 +3,8 @@
 
 # Todo
 
-[] Healthchecks
+[x] Healthchecks
+[] Security group
 [] Target
 [] Condition
 [] Constraints on actions
@@ -53,8 +54,40 @@ sig ContentType {}
 sig HostName {}
 sig Path {}
 sig Query {}
-
 ```
+
+## Security group
+
+<https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html>
+
+```alloy
+sig SecurityGroup {
+	inbound: set SecurityGroupRule,
+	outbound: set SecurityGroupRule
+}
+
+sig SecurityGroupRule {
+	protocol: SecurityGroupProtocol,
+	ports: set Port,
+	// source for inbound, dest for outbound
+	// We aren't modeling prefix lists here
+	traffic: IPv4Address+IPv6Address+IPv4Range+IPv6Range+SecurityGroup
+}
+
+sig IPv4Address  {}
+sig IPv6Address  {}
+sig IPv4Range {
+	addresses: set IPv4Address
+}
+sig IPv6Range {
+	address: set IPv6Address
+}
+
+
+sig SecurityGroupProtocol {}
+one sig TCP extends SecurityGroupProtocol {}
+```
+
 
 ## Load balancer
 
@@ -62,7 +95,8 @@ sig Query {}
 // A load balancer serves as the single point of contact for clients
 sig LoadBalancer {
 	//  You add one or more listeners to your load balancer.
-	listeners: set Listener
+	listeners: set Listener,
+	securityGroups: set SecurityGroup
 } {
 	// The docs don't specify this, but presumably the listeners have to be on different ports
 	no disj l1, l2: listeners | l1.port=l2.port
@@ -180,7 +214,7 @@ sig Condition {}
 
 ```
 
-# Target gtoups
+# Target groups
 
 <https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html>
 
@@ -201,6 +235,15 @@ sig TargetGroup {
 
 	protocolVersion: ProtocolVersion
 } {
+	// Targets have to match the type
+	(targetType = InstanceType) => targets in Instance
+	(targetType = IpType) => targets in IP
+	(targetType = LambdaType) => {
+		targets in Lambda
+		// For lambdas, only one target
+		one targets
+	}
+
 	// Considerations for the gRPC protocol version
 	(protocolVersion = GRPC) => {
 		// The only supported listener protocol is HTTPS.
@@ -209,7 +252,7 @@ sig TargetGroup {
 		// The model already enforces this, because you can only specify a target group with a forward rule
 
 		// The only supported target types are instance and ip.
-		targetType in Instance+IP
+		targetType in InstanceType+IpType
 
 		// You cannot use Lambda functions as targets.
 		// This sounds redundant with the one above
@@ -223,29 +266,40 @@ sig TargetGroup {
 		// The model already enforces this, because you can only specify a target group with a forward rule
 
 		// The only supported target types are instance and ip.
-		targetType in Instance+IP
+		targetType in InstanceType+IpType
 	}
+
+
 }
 
 abstract sig TargetType {}
 
 // The targets are specified by instance ID.
-sig Instance extends TargetType {}
+sig InstanceType extends TargetType {}
 
 // The targets are IP addresses
 // For restrictions by CIDR block, see: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html#target-type
-sig IP extends TargetType {}
+sig IpType extends TargetType {}
 
 // The target is a Lambda function.
-sig Lambda extends TargetType {}
-
-sig Target {}
+sig LambdaType extends TargetType {}
 
 // https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html#target-group-protocol-version
 abstract sig ProtocolVersion {}
 one sig HTTP1_1, HTTP2, GRPC extends ProtocolVersion {}
 
 ```
+
+## Targets
+
+<https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-register-targets.html>
+
+
+```alloy
+abstract sig Target {}
+sig Instance, IP, Lambda extends Target {}
+```
+
 
 ## Health checks
 
