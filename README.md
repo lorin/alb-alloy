@@ -287,8 +287,9 @@ sig Count {}
 ```alloy
 fact "no unowned entities of interest" {
 	all l: Listener | some listeners.l
-	all t: TargetGroup | some rule : Forward | t in rule.groups
+	all t: TargetGroup | some f : Forward | t in f.groups
 	all action : Action | some rule : Rule | action in rule.actions[univ]
+	all h : HealthCheck | some t: TargetGroup  | h in t.healthChecks
 }
 
 run { one LoadBalancer }

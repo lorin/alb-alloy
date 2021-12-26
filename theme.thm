@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<alloy>
+
+<view>
+
+<defaultnode/>
+
+<defaultedge/>
+
+<node>
+   <type name="Action"/>
+   <type name="AuthenticateCognito"/>
+   <type name="AuthenticateOidc"/>
+   <type name="Condition"/>
+   <type name="FixedResponse"/>
+   <type name="Forward"/>
+   <type name="GRPC"/>
+   <type name="HealthCheck"/>
+   <type name="HTTP"/>
+   <type name="HTTP1_1"/>
+   <type name="HTTP2"/>
+   <type name="HTTP_301"/>
+   <type name="HTTP_302"/>
+   <type name="HTTPS"/>
+   <type name="Instance"/>
+   <type name="Int"/>
+   <type name="IP"/>
+   <type name="IPv4"/>
+   <type name="IPv6"/>
+   <type name="Lambda"/>
+   <type name="Listener"/>
+   <type name="LoadBalancer"/>
+   <type name="Redirect"/>
+   <type name="Rule"/>
+   <type name="String"/>
+   <type name="TargetGroup"/>
+   <type name="univ"/>
+   <type name="ordering/Ord"/>
+   <type name="seq/Int"/>
+</node>
+
+<node hideunconnected="yes">
+   <type name="ContentType"/>
+   <type name="Count"/>
+   <type name="Duration"/>
+   <type name="HealthCheckPath"/>
+   <type name="HostName"/>
+   <type name="IpAddressType"/>
+   <type name="MessageBody"/>
+   <type name="Path"/>
+   <type name="Port"/>
+   <type name="Priority"/>
+   <type name="Protocol"/>
+   <type name="ProtocolVersion"/>
+   <type name="Query"/>
+   <type name="StatusCode"/>
+   <type name="Target"/>
+   <type name="TargetType"/>
+   <type name="Weight"/>
+</node>
+
+<edge visible="no">
+   <relation name="$rule"> <type name="TargetGroup"/> <type name="Forward"/> </relation>
+   <relation name="$rule&apos;"> <type name="Action"/> <type name="Rule"/> </relation>
+   <relation name="$s"> <type name="Rule"/> <type name="Action"/> </relation>
+   <relation name="$t"> <type name="HealthCheck"/> <type name="TargetGroup"/> </relation>
+</edge>
+
+<edge visible="no" attribute="yes">
+   <relation name="healthyThreshold"> <type name="HealthCheck"/> <type name="Count"/> </relation>
+   <relation name="hostname"> <type name="Redirect"/> <type name="HostName"/> </relation>
+   <relation name="interval"> <type name="HealthCheck"/> <type name="Duration"/> </relation>
+   <relation name="ipAddressType"> <type name="TargetGroup"/> <type name="IpAddressType"/> </relation>
+   <relation name="matcher"> <type name="HealthCheck"/> <type name="StatusCode"/> </relation>
+   <relation name="path"> <type name="HealthCheck"/> <type name="HealthCheckPath"/> </relation>
+   <relation name="path"> <type name="HealthCheckPath"/> <type name="Path"/> </relation>
+   <relation name="path"> <type name="Redirect"/> <type name="Path"/> </relation>
+   <relation name="port"> <type name="HealthCheck"/> <type name="Port"/> </relation>
+   <relation name="port"> <type name="Listener"/> <type name="Port"/> </relation>
+   <relation name="port"> <type name="Redirect"/> <type name="Port"/> </relation>
+   <relation name="port"> <type name="TargetGroup"/> <type name="Port"/> </relation>
+   <relation name="priority"> <type name="Rule"/> <type name="Priority"/> </relation>
+   <relation name="protocol"> <type name="HealthCheck"/> <type name="Protocol"/> </relation>
+   <relation name="protocol"> <type name="Listener"/> <type name="Protocol"/> </relation>
+   <relation name="protocol"> <type name="Redirect"/> <type name="Protocol"/> </relation>
+   <relation name="protocol"> <type name="TargetGroup"/> <type name="Protocol"/> </relation>
+   <relation name="protocolVersion"> <type name="TargetGroup"/> <type name="ProtocolVersion"/> </relation>
+   <relation name="query"> <type name="HealthCheckPath"/> <type name="Query"/> </relation>
+   <relation name="stickiness"> <type name="Forward"/> <type name="Duration"/> </relation>
+   <relation name="targetType"> <type name="TargetGroup"/> <type name="TargetType"/> </relation>
+   <relation name="timeout"> <type name="HealthCheck"/> <type name="Duration"/> </relation>
+   <relation name="UnhealthyThreshold"> <type name="HealthCheck"/> <type name="Count"/> </relation>
+</edge>
+
+</view>
+
+</alloy>
