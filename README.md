@@ -3,8 +3,10 @@
 
 # Todo
 
+[] Healthchecks
 [] Target
 [] Condition
+[] Constraints on actions
 
 # Modeling AWS Application Load Balancers in Alloy
 
@@ -16,10 +18,47 @@ This file can be loaded into the Alloy Analyzer.
 I'm going to annotate my model with comments that are copy-pasted from the [ALB docs][alb-intro].
 
 
+## Preamble
 
 ```alloy
 open util/ordering[Priority]
+```
 
+## Basics
+
+Here are some common models we're going to need.
+Note that Alloy doesn't require us to specify them before they are used.
+
+
+```alloy
+// In the API, this is modeled as an integer that represents the duration in secodns
+// We just model it as "duration"
+sig Duration {}
+
+
+abstract sig Protocol {}
+one sig HTTP, HTTPS extends Protocol {}
+
+sig Port {}
+
+abstract sig IpAddressType {}
+one sig IPv4, IPv6 extends IpAddressType {}
+
+
+// Note that we only explicitly model the 301 and 302 codes.
+sig StatusCode {}
+one sig HTTP_301, HTTP_302 extends StatusCode {}
+
+sig ContentType {}
+sig HostName {}
+sig Path {}
+sig Query {}
+
+```
+
+## Load balancer
+
+```alloy
 // A load balancer serves as the single point of contact for clients
 sig LoadBalancer {
 	//  You add one or more listeners to your load balancer.
@@ -46,9 +85,6 @@ sig Listener {
 	default in rules
 }
 
-abstract sig Protocol {}
-one sig HTTP, HTTPS extends Protocol {}
-sig Port {}
 ```
 
 ## Rules
@@ -101,8 +137,6 @@ sig FixedResponse extends Action {
 	messageBody: MessageBody
 }
 
-sig StatusCode {}
-sig ContentType {}
 sig MessageBody {}
 ```
 
@@ -127,9 +161,6 @@ sig Forward extends Action {
 // We don't model the weights explicitly here.
 sig Weight {}
 
-// In the API, this is modeled as an integer that represents the duration in secodns
-// We don't model that here, though
-sig Duration {}
 ```
 
 ```alloy
@@ -144,11 +175,6 @@ sig Redirect extends Action {
 	query: Query
 }
 
-one sig HTTP_301, HTTP_302 extends StatusCode {}
-
-sig HostName {}
-sig Path {}
-sig Query {}
 
 sig Condition {}
 
@@ -213,13 +239,7 @@ sig IP extends TargetType {}
 // The target is a Lambda function.
 sig Lambda extends TargetType {}
 
-abstract sig IpAddressType {}
-one sig IPv4, IPv6 extends IpAddressType {}
-
 sig Target {}
-
-// Health checks are performed on all targets registered to a target group that is specified in a listener rule for your load balancer.
-sig HealthCheck {}
 
 // https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html#target-group-protocol-version
 abstract sig ProtocolVersion {}
@@ -227,17 +247,48 @@ one sig HTTP1_1, HTTP2, GRPC extends ProtocolVersion {}
 
 ```
 
-The docs say:
+## Health checks
 
-> You can register a target with multiple target groups.
+<https://docs.aws.amazon.com/elasticloadbalancing/latest/application/target-group-health-checks.html>
 
-We don't actually have to do anything in our Alloy model to permit this.
+
+```alloy
+// Health checks are performed on all targets registered to a target group that is specified in a listener rule for your load balancer.
+
+sig HealthCheck {
+	protocol: Protocol,
+	port: Port,
+
+  // Confusingly, a "path" in the redirect actions is separate from the query: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#redirect-actions
+	// Here, the path includes the query, so we use a different model
+	path: HealthCheckPath,
+	timeout: Duration,
+	interval: Duration,
+	healthyThreshold: Count,
+	UnhealthyThreshold: Count,
+	// The codes to use when checking for a successful response from a target. These are called Success codes in the console.
+	matcher: set StatusCode
+}
+
+sig HealthCheckPath {
+	path: Path,
+	query: lone Query
+}
+
+// Model of an integer count
+sig Count {}
+
+```
+
 
 ## Running the model
+
 
 ```alloy
 fact "no unowned entities of interest" {
 	all l: Listener | some listeners.l
+	all t: TargetGroup | some rule : Forward | t in rule.groups
+	all action : Action | some rule : Rule | action in rule.actions[univ]
 }
 
 run { one LoadBalancer }
