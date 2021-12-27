@@ -1,36 +1,30 @@
 ---
 ---
 
-# Todo
-
-[x] Healthchecks
-[x] Security group
-[x] Target
-[x] Condition
-[x] Zap ranges from the visualization
-[x] Give IP addresses to instances
-[] Constraints on actions
-
 # Modeling AWS Application Load Balancers in Alloy
 
-I've always found the configuration details for AWS [application load balancers][alb-intro] confusing.
-This makes it an excellent candidate for modeling in [Alloy][alloy-docs].
+I've always found the configuration details for AWS [application load balancers][alb-intro] (ALBs) confusing.
+
+ALB concepts you need to understand include:
+* listeners
+* rules
+* actions
+* target groups
+
+You also need to understand *security groups*.
+If you use *autoscaling groups*, you'll need to understand how those relate to ALBs.
+
+The large number of concepts makes ALBs an excellent candidate for modeling in [Alloy][alloy-docs].
 
 This file can be loaded into the Alloy Analyzer.
 
 I'm going to annotate my model with comments that are copy-pasted from the [ALB docs][alb-intro].
 
-
-## Preamble
-
-```alloy
-open util/ordering[Priority]
-```
-
 ## Basics
 
 Here are some common models we're going to need.
 Note that Alloy doesn't require us to specify them before they are used.
+Most of these should be self-explanatory.
 
 
 ```alloy
@@ -60,29 +54,11 @@ sig Query {}
 
 ## Security group
 
+Before we dive in to ALBs, we're going to model security groups.
 
 <https://docs.aws.amazon.com/vpc/latest/userguide/VPC_SecurityGroups.html>
 
 ```alloy
-
-// True if src is allowed to reach dest on port
-pred allows[source : set SecurityGroup, dest : set SecurityGroup, port: Port] {
-	// inbound access allowed to dest from source
-	some rule : dest.inbound | {
-		// allows access on the port
-		port in rule.ports
-
-		// from the "source" security group
-		some source & rule.traffic
-	}
-
-	// outbound access allowed to dest from source
-	some rule : source.outbound {
-		// allows access on the port
-		port in rule.ports
-		some dest & rule.traffic
-	}
-}
 
 sig SecurityGroup {
 	inbound: set SecurityGroupRule,
@@ -91,7 +67,7 @@ sig SecurityGroup {
 
 sig SecurityGroupRule {
 	protocol: SecurityGroupProtocol,
-	ports: set Port,
+	ports: some Port,
 	// source for inbound, dest for outbound
 	// We aren't modeling prefix lists here
 	traffic: IPv4Address+IPv6Address+IPv4Range+IPv6Range+SecurityGroup
@@ -113,6 +89,30 @@ sig IPv6Range extends IpRange {} {
 
 sig SecurityGroupProtocol {}
 one sig TCP extends SecurityGroupProtocol {}
+```
+
+We also create a convenience function to check for access between AWS entities.
+We assume both source and destination entities are associated with a collection of security groups.
+
+```alloy
+// True if src is allowed to reach dest on port
+pred allows[source : set SecurityGroup, dest : set SecurityGroup, port: Port] {
+	// inbound access allowed to dest from source
+	some rule : dest.inbound | {
+		// allows access on the port
+		port in rule.ports
+
+		// from the "source" security group
+		some source & rule.traffic
+	}
+
+	// outbound access allowed to dest from source
+	some rule : source.outbound {
+		// allows access on the port
+		port in rule.ports
+		some dest & rule.traffic
+	}
+}
 ```
 
 
@@ -141,7 +141,7 @@ sig LoadBalancer {
 	//
 
 	// All target groups (other than lambdas, which don't have security groups)
-	let grps = (listeners.rules.actions[univ]).groups |  {
+	let grps = listeners.rules.elems.actions.elems.groups |  {
 		all targetGroup : grps |  {
 			// Each security group of the targets in the group must allow inbound access on the target group port
 			all target : targetGroup.targets | {
@@ -161,13 +161,18 @@ sig Listener {
 	port: Port,
 
 	// The rules that you define for a listener determine how the load balancer routes requests to its registered targets.
-	rules: set Rule,
+	// They are sorted in priority order
+	rules: seq Rule,
 	// You must define a default rule for each listener
-	default: Rule,
+	default: Rule
 
 } {
-	// the default listener rule is one of the rules
-	default in rules
+	// The default rule is evaluated last.
+	default in rules.last
+
+	// the default rule cannot have any conditions
+	// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/listener-update-rules.html
+	no default.conditions
 }
 
 ```
@@ -180,42 +185,58 @@ sig Listener {
 ```alloy
 
 //  Each rule consists of a priority, one or more actions, and one or more conditions.
+//  We model the priority as a sequence on the listener, rather than in the Rule sig
 sig Rule {
-	// Each rule has a priority
-	priority: Priority,
 	actions: seq Action,
 
-	//
+	// conditions that need to match for the rule to fire
+	// not sure if any or all conditions have to match
 	conditions: set Condition
 } {
 	// Each rule must include exactly one of the following actions: forward, redirect, or fixed-response
 	// and it must be the last action to be performed.
-	some s: univ.actions | {
-		s in Forward+Redirect+FixedResponse
-		no (univ.actions -s ) & Forward+Redirect+FixedResponse
-		s = actions.last
+	some s : actions.elems | {
+		s in Forward+Redirect+FixedResponse // one of those actions
+		no (actions.elems - s ) & Forward+Redirect+FixedResponse // it's the only one
+		s in actions.last // it's the last action
+		// it's not in the other acitons
+		no s & actions.butlast.elems
+
+
 	}
 
 	// Each rule can optionally include up to one of each of the following conditions: host-header, http-request-method, path-pattern, and source-ip.
-	lone conditions & (HostHeader + HttpRequestMethod+PathPattern+SourceIp)
+	lone conditions & (HostHeader+HttpRequestMethod+PathPattern+SourceIp)
 
 	// Each rule can also optionally include one or more of each of the following conditions: http-header and query-string.
 	// Alloy permits this by default, so nothing to specify here
+
 }
 
-// Rules are evaluated in priority order, from the lowest value to the highest value. The default rule is evaluated last.
-fact "Default rule is evaluated last" {
-	all rule : Listener.default | rule.priority = last
+fact "All rules are associated with a listener" {
+	all r : Rule | some l: Listener | r in l.rules.elems
 }
+
+
 sig Priority {}
 ```
 
 ## Actions
 
+<https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#rule-action-types>
+
 ```alloy
 abstract sig Action {}
 
-sig AuthenticateCognito, AuthenticateOidc extends Action {}
+// We don't model these in detail, for more details, see:
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/APIReference/API_AuthenticateCognitoActionConfig.html
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/APIReference/API_AuthenticateOidcActionConfig.html
+lone sig AuthenticateCognito, AuthenticateOidc extends Action {}
+
+fact "authenticate actions require https listener" {
+	all l : Listener |
+		some l.rules.elems.actions.elems & (AuthenticateCognito+AuthenticateOidc) => l.protocol = HTTPS
+}
 ```
 
 
@@ -248,6 +269,9 @@ sig Forward extends Action {
 	// If enabled, specify a duration
 	// For more details on stickiness, see: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/sticky-sessions.html
 	stickiness: lone Duration
+} {
+	// All groups get some weight
+	all group : groups | some weights.group
 }
 
 //  Each target group weight is a value from 0 to 999
@@ -270,6 +294,7 @@ sig Redirect extends Action {
 
 
 // https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#rule-condition-types
+// You can specify up to three match evaluations per condition, but we don't model that explicitly here
 abstract sig Condition {}
 
 // https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#host-conditions
@@ -501,24 +526,16 @@ fact "all instances are owned by ASGs" {
 	Instance in AutoScalingGroup.instances
 }
 
-/*
-pred asgsAreReachable {
-	all lb : LoadBalancer |
-		all listener : lb.listeners |
-			all rule : listener.rules |
-				all forward : rule.actions[univ] & Forward |
-					all targetGroup : forward.groups |
-						all asg :
-}
-*/
-
-
 
 run {
 	one LoadBalancer
 	some AutoScalingGroup.instances
 	some LoadBalancer.listeners
 	all t : TargetGroup | some t.targets
+
+	// No auth for now, to keep things simple
+	no AuthenticateCognito
+	no AuthenticateOidc
 }
 ```
 
