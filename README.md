@@ -295,8 +295,12 @@ sig Weight {}
 
 ```
 
+### Redirect actions
+
+<https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#redirect-actions>
+
 ```alloy
-// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#redirect-actions
+//
 // Redirect target: protocol://hostname:port/path?query
 sig Redirect extends Action {
   statusCode: HTTP_301+HTTP_302,
@@ -306,10 +310,15 @@ sig Redirect extends Action {
   path: Path,
   query: Query
 }
+```
 
+## Conditions
 
-// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#rule-condition-types
-// You can specify up to three match evaluations per condition, but we don't model that explicitly here
+<https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#rule-condition-types>
+
+```alloy
+
+// // You can specify up to three match evaluations per condition, but we don't model that explicitly here
 abstract sig Condition {}
 
 // https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#host-conditions
@@ -483,7 +492,7 @@ sig HealthCheckPath {
 sig Count {}
 ```
 
-## Autoscaling group
+## Autoscaling groups
 
 Interestingly, you don't add an autoscaling group to a load balancer.
 Instead, you add a load balancer to an autoscaling group.
