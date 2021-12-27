@@ -4,8 +4,8 @@
 # Todo
 
 [x] Healthchecks
-[] Security group
-[] Target
+[x] Security group
+[x] Target
 [] Condition
 [] Constraints on actions
 
@@ -65,7 +65,21 @@ sig Query {}
 
 // True if src is allowed to reach dest on port
 pred allows[source : set SecurityGroup, dest : set SecurityGroup, port: Port] {
-	port in (source.outbound.ports & dest.inbound.ports)
+	// inbound access allowed to dest from source
+	some rule : dest.inbound | {
+		// allows access on the port
+		port in rule.ports
+
+		// from the "source" security group
+		some source & rule.traffic
+	}
+
+	// outbound access allowed to dest from source
+	some rule : source.outbound {
+		// allows access on the port
+		port in rule.ports
+		some dest & rule.traffic
+	}
 }
 
 sig SecurityGroup {
@@ -81,13 +95,17 @@ sig SecurityGroupRule {
 	traffic: IPv4Address+IPv6Address+IPv4Range+IPv6Range+SecurityGroup
 }
 
-sig IPv4Address  {}
-sig IPv6Address  {}
-sig IPv4Range {
-	addresses: set IPv4Address
+abstract sig IpAddress {}
+sig IPv4Address, IPv6Address extends IpAddress {}
+
+abstract sig IpRange {
+	addresses: set IpAddress
 }
-sig IPv6Range {
-	address: set IPv6Address
+sig IPv4Range extends IpRange {} {
+	addresses in IPv4Address
+}
+sig IPv6Range extends IpRange {} {
+	addresses in IPv6Address
 }
 
 
@@ -401,6 +419,8 @@ fact "no unowned entities of interest" {
 	all t: TargetGroup | some f : Forward | t in f.groups
 	all action : Action | some rule : Rule | action in rule.actions[univ]
 	all h : HealthCheck | some t: TargetGroup  | h in t.healthChecks
+
+	all asg : AutoScalingGroup | some asg.loadBalancer
 }
 
 run { one LoadBalancer }
