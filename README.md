@@ -167,6 +167,10 @@ sig Listener {
 	default: Rule
 
 } {
+	// Rules are unique
+	not rules.hasDups
+
+
 	// The default rule is evaluated last.
 	default in rules.last
 
