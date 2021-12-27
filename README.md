@@ -162,13 +162,15 @@ sig LoadBalancer {
 }
 
 
-// A listener checks for connection requests from clients, using the protocol and port that you configure.
+// A listener checks for connection requests from clients, using the protocol and port that
+// you configure.
 sig Listener {
-  // A listener is configured for a specific protocol and prot
+  // A listener is configured for a specific protocol and port
   protocol: Protocol,
   port: Port,
 
-  // The rules that you define for a listener determine how the load balancer routes requests to its registered targets.
+  // The rules that you define for a listener determine how the load balancer routes requests
+  // to its registered targets.
   // They are sorted in priority order
   rules: seq Rule,
   // You must define a default rule for each listener
