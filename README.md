@@ -27,13 +27,13 @@ I've also saved the theme file that I've used (it's called [theme.thm](theme.thm
 ## Basics
 
 Here are some common models we're going to need.
-Note that Alloy doesn't require us to specify them before they are used.
+Note that Alloy doesn't require us to specify them before they are used, but I decided to put them up front.
 Most of these should be self-explanatory.
 
 
 ```alloy
-// In the API, this is modeled as an integer that represents the duration in secodns
-// We just model it as "duration"
+// In the actual AWS API, duration is an integer that represents the duration in seconds
+// But we don't need to model it at that level of detail here
 sig Duration {}
 
 
