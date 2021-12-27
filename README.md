@@ -353,7 +353,8 @@ sig SourceIp extends Condition {}
 
 ```alloy
 
-// Each target group routes requests to one or more registered targets, such as EC2 instances, using the protocol and port number that you specify.
+// Each target group routes requests to one or more registered targets, such as EC2 instances,
+// using the protocol and port number that you specify.
 sig TargetGroup {
   protocol: Protocol,
   port: Port,
