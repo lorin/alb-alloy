@@ -347,7 +347,7 @@ sig SourceIp extends Condition {}
 
 ```
 
-# Target groups
+## Target groups
 
 <https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html>
 
