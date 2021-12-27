@@ -7,20 +7,22 @@
 
 I've always found the configuration details for AWS [application load balancers][alb-intro] (ALBs) confusing.
 
-ALB concepts you need to understand include:
+To configure an ALB, you need to understand multiple concepts, including:
 * listeners
 * rules
 * actions
 * target groups
 
-You also need to understand *security groups*.
-If you use *autoscaling groups*, you'll need to understand how those relate to ALBs.
+You also need to understand *security groups*, otherwise your ALB won't actually be able to serve traffic.
+And, if you use *autoscaling groups*, you'll need to understand how those relate to ALBs.
 
-The large number of concepts makes ALBs an excellent candidate for modeling in [Alloy][alloy-docs].
+The large number of moving parts makes ALBs an excellent candidate for modeling in [Alloy][alloy-docs], which is what this repo contains.
+I've annotated my model with comments that are copy-pasted from the [ALB docs][alb-intro].
 
-This file can be loaded into the Alloy Analyzer.
+Note that you can load this Markdown file directly in the [Alloy Analyzer][analyzer].
+I've also saved the theme file that I've used (it's called [theme.thm](theme.thm)) for the visualization.
 
-I'm going to annotate my model with comments that are copy-pasted from the [ALB docs][alb-intro].
+[analyzer]: https://alloytools.org/download.html
 
 ## Basics
 
