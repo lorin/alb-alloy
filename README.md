@@ -3,7 +3,7 @@
 
 # Modeling AWS Application Load Balancers in Alloy
 
-![example instance][run.png]
+![example instance](run.png)
 
 I've always found the configuration details for AWS [application load balancers][alb-intro] (ALBs) confusing.
 
