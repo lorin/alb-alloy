@@ -531,7 +531,7 @@ one sig Adding, Added, InService, Removing, Removed extends TargetGroupState {}
 fact "no unowned entities of interest" {
   all l: Listener | some listeners.l
   all t: TargetGroup | some f : Forward | t in f.groups
-  all action : Action | some rule : Rule | action in rule.actions[univ]
+  all action : Action | some rule : Rule | action in rule.actions.elems
   all h : HealthCheck | some t: TargetGroup  | h in t.healthChecks
 
   all asg : AutoScalingGroup | some asg.loadBalancer
