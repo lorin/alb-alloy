@@ -6,7 +6,9 @@
 [x] Healthchecks
 [x] Security group
 [x] Target
-[] Condition
+[x] Condition
+[x] Zap ranges from the visualization
+[x] Give IP addresses to instances
 [] Constraints on actions
 
 # Modeling AWS Application Load Balancers in Alloy
@@ -134,12 +136,21 @@ sig LoadBalancer {
 	}
 
 
-	// Allow the load balancer to hit the instance listener
+	//
+	// Allow the load balancer to hit the instances on their listener ports and health check ports
+	//
 
-	// All target groups associated with security groups
-	all target : (listeners.rules.actions[univ]).groups.targets & (Instance+IP) |
-			 // the port that the listener is trying to forward to allows access from the security group assocaited with the load balancer
-		allows[securityGroups, target.@securityGroups, target.port]
+	// All target groups (other than lambdas, which don't have security groups)
+	let grps = (listeners.rules.actions[univ]).groups |  {
+		all targetGroup : grps |  {
+			// Each security group of the targets in the group must allow inbound access on the target group port
+			all target : targetGroup.targets | {
+				allows[securityGroups, target.@securityGroups, targetGroup.port]
+				all healthCheck : targetGroup.healthChecks |
+					allows[securityGroups, target.@securityGroups, healthCheck.port]
+			}
+		}
+	}
 }
 
 
@@ -173,6 +184,8 @@ sig Rule {
 	// Each rule has a priority
 	priority: Priority,
 	actions: seq Action,
+
+	//
 	conditions: set Condition
 } {
 	// Each rule must include exactly one of the following actions: forward, redirect, or fixed-response
@@ -182,6 +195,12 @@ sig Rule {
 		no (univ.actions -s ) & Forward+Redirect+FixedResponse
 		s = actions.last
 	}
+
+	// Each rule can optionally include up to one of each of the following conditions: host-header, http-request-method, path-pattern, and source-ip.
+	lone conditions & (HostHeader + HttpRequestMethod+PathPattern+SourceIp)
+
+	// Each rule can also optionally include one or more of each of the following conditions: http-header and query-string.
+	// Alloy permits this by default, so nothing to specify here
 }
 
 // Rules are evaluated in priority order, from the lowest value to the highest value. The default rule is evaluated last.
@@ -250,7 +269,32 @@ sig Redirect extends Action {
 }
 
 
-sig Condition {}
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#rule-condition-types
+abstract sig Condition {}
+
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#host-conditions
+// Route based on the host name of each request
+sig HostHeader extends Condition {}
+
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#http-header-conditions
+// Route based on the HTTP headers for each request
+sig HttpHeader extends Condition {}
+
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#http-request-method-conditions
+// Route based on the HTTP request method of each request
+sig HttpRequestMethod extends Condition {}
+
+// Route based on path patterns in the request URLs.
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#path-conditions
+sig PathPattern extends Condition {}
+
+// Route based on path patterns in the request URLs.
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#query-string-conditions
+sig QueryString extends Condition {}
+
+// Route based on the source IP address of each request
+// https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-listeners.html#source-ip-conditions
+sig SourceIp extends Condition {}
 
 ```
 
@@ -276,9 +320,9 @@ sig TargetGroup {
 	protocolVersion: ProtocolVersion
 } {
 	// Targets have to match the type
-	(targetType = InstanceType) => targets in Instance
-	(targetType = IpType) => targets in IP
-	(targetType = LambdaType) => {
+	(targetType in InstanceType) => targets in Instance
+	(targetType in IpType) => targets in IP
+	(targetType in LambdaType) => {
 		targets in Lambda
 		// For lambdas, only one target
 		one targets
@@ -315,14 +359,14 @@ sig TargetGroup {
 abstract sig TargetType {}
 
 // The targets are specified by instance ID.
-sig InstanceType extends TargetType {}
+one sig InstanceType extends TargetType {}
 
 // The targets are IP addresses
 // For restrictions by CIDR block, see: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html#target-type
-sig IpType extends TargetType {}
+one sig IpType extends TargetType {}
 
 // The target is a Lambda function.
-sig LambdaType extends TargetType {}
+one sig LambdaType extends TargetType {}
 
 // https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-target-groups.html#target-group-protocol-version
 abstract sig ProtocolVersion {}
@@ -341,7 +385,24 @@ abstract sig SecurityGroupTarget extends Target {
 	securityGroups: set SecurityGroup
 }
 
-sig Instance, IP extends SecurityGroupTarget {}
+sig IP extends SecurityGroupTarget {
+	// An IP is associated with a single IP address
+	address: IpAddress
+}
+
+fact "addresses are unique" {
+	no disj ip1, ip2 : IP | ip1.address = ip2.address
+}
+
+
+sig Instance extends SecurityGroupTarget {
+	// An instance can have multiple IP addresses, must have at least one
+	addresses: some IpAddress
+}
+
+fact "all addresses are associated with at most one instance" {
+	all addr : IpAddress | lone (Instance <: addresses).addr
+}
 
 
 // Lambdas don't use security groups for access permissions, they use a different mechanism, see:
@@ -368,7 +429,7 @@ sig HealthCheck {
 	timeout: Duration,
 	interval: Duration,
 	healthyThreshold: Count,
-	UnhealthyThreshold: Count,
+	unhealthyThreshold: Count,
 	// The codes to use when checking for a successful response from a target. These are called Success codes in the console.
 	matcher: set StatusCode
 }
@@ -404,6 +465,10 @@ sig AutoScalingGroup {
 	some loadBalancer => some targetGroup
 }
 
+fact "instance can be in at most one ASG" {
+	all disj i1, i2 : Instance | no (instances.i1 & instances.i2)
+}
+
 // https://docs.aws.amazon.com/autoscaling/ec2/APIReference/API_LoadBalancerTargetGroupState.html
 abstract sig TargetGroupState {}
 one sig Adding, Added, InService, Removing, Removed extends TargetGroupState {}
@@ -423,7 +488,38 @@ fact "no unowned entities of interest" {
 	all asg : AutoScalingGroup | some asg.loadBalancer
 }
 
-run { one LoadBalancer }
+// We'll focus specifically on security-group related security group rules in our outputs
+fact "Only security group based security group rules" {
+	SecurityGroupRule.traffic in SecurityGroup
+
+	// We just won't generate any of the IP related stuff
+	no IP
+	no IpRange
+}
+
+fact "all instances are owned by ASGs" {
+	Instance in AutoScalingGroup.instances
+}
+
+/*
+pred asgsAreReachable {
+	all lb : LoadBalancer |
+		all listener : lb.listeners |
+			all rule : listener.rules |
+				all forward : rule.actions[univ] & Forward |
+					all targetGroup : forward.groups |
+						all asg :
+}
+*/
+
+
+
+run {
+	one LoadBalancer
+	some AutoScalingGroup.instances
+	some LoadBalancer.listeners
+	all t : TargetGroup | some t.targets
+}
 ```
 
 
