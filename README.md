@@ -92,6 +92,7 @@ sig IPv6Range extends IpRange {} {
 
 
 sig SecurityGroupProtocol {}
+// There are other protocols, but here we're only modeling TCP
 one sig TCP extends SecurityGroupProtocol {}
 ```
 
@@ -122,23 +123,26 @@ pred allows[source : set SecurityGroup, dest : set SecurityGroup, port: Port] {
 
 ## Load balancer
 
+Here's where we actually start to model the load balancer.
+
 ```alloy
 // A load balancer serves as the single point of contact for clients
 sig LoadBalancer {
 	//  You add one or more listeners to your load balancer.
 	listeners: set Listener,
+
 	securityGroups: set SecurityGroup,
 } {
 	// The docs don't specify this, but presumably the listeners have to be on different ports
 	no disj l1, l2: listeners | l1.port=l2.port
 
-	// The rules for the security groups that are associated with your load balancer must allow traffic in both directions on both the listener and the health check ports.
+	// The rules for the security groups that are associated with your load balancer
+	// must allow traffic in both directions on both the listener and the health check ports.
 
 	// Allow inbound access to the listener
 	all l: Listener | some s : securityGroups | {
 		l.port in s.inbound.ports
 	}
-
 
 	//
 	// Allow the load balancer to hit the instances on their listener ports and health check ports
@@ -171,7 +175,8 @@ sig Listener {
 	default: Rule
 
 } {
-	// Rules are unique
+	// Rules are unique. Even if two rules have the same values,
+	// they're still different rules according to Alloy
 	not rules.hasDups
 
 
